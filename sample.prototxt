@@ -1,0 +1,289 @@
+
+layer {
+  name: "data"
+  type: "Python"
+  top: "data"
+  top: "isbox"
+  top: "xy"
+  top: "angle"
+  include {
+    phase: TRAIN      
+  }
+  python_param {
+    module: "python_layers"
+    layer: "BoxInputLayer"
+    param_str:"dict(num=128, phase=\'TRAIN\')"
+  }
+}
+layer {
+  name: "data"
+  type: "Python"
+  top: "data"
+  top: "isbox"
+  top: "xy"
+  top: "angle"
+  include {
+    phase: TEST      
+  }
+  python_param {
+    module: "python_layers"
+    layer: "BoxInputLayer"
+    param_str:"dict(num=128, phase=\'TEST\')"
+  }
+}
+
+
+## how to handle test data?
+
+#######
+# Start of existing network here
+# (Excludinng its data  layers of course)
+layer {
+  name: "conv1"
+  type: "Convolution"
+  bottom: "data"
+  top: "conv1"
+  param {
+    lr_mult: 0 #1
+  }
+  param {
+    lr_mult: 0 #2
+  }
+  convolution_param {
+    num_output: 20
+    kernel_size: 5
+    stride: 1
+    weight_filler {
+      type: "xavier"
+    }
+    bias_filler {
+      type: "constant"
+    }
+  }
+}
+layer {
+  name: "pool1"
+  type: "Pooling"
+  bottom: "conv1"
+  top: "pool1"
+  pooling_param {
+    pool: MAX
+    kernel_size: 2
+    stride: 2
+  }
+}
+layer {
+  name: "conv2"
+  type: "Convolution"
+  bottom: "pool1"
+  top: "conv2"
+  param {
+    lr_mult: 0 #1
+  }
+  param {
+    lr_mult: 0 # 2
+  }
+  convolution_param {
+    num_output: 50
+    kernel_size: 5
+    stride: 1
+    weight_filler {
+      type: "xavier"
+    }
+    bias_filler {
+      type: "constant"
+    }
+  }
+}
+layer {
+  name: "pool2"
+  type: "Pooling"
+  bottom: "conv2"
+  top: "pool2"
+  pooling_param {
+    pool: MAX
+    kernel_size: 2
+    stride: 2
+  }
+}
+layer {
+  name: "drop_p2"
+  type: "Dropout"
+  bottom: "pool2"
+  top: "pool2"
+  dropout_param {
+    dropout_ratio: 0.5
+  }
+  include {
+    phase: TRAIN
+  }
+}
+layer {
+  name: "ip1"
+  type: "InnerProduct"
+  bottom: "pool2"
+  top: "ip1"
+  param {
+    lr_mult: 0 #1
+  }
+  param {
+    lr_mult: 0 #2
+  }
+  inner_product_param {
+    num_output: 500
+    weight_filler {
+      type: "xavier"
+    }
+    bias_filler {
+      type: "constant"
+    }
+  }
+}
+layer {
+  name: "relu1"
+  type: "ReLU"
+  bottom: "ip1"
+  top: "ip1"
+}
+layer {
+  name: "drop_ip1"
+  type: "Dropout"
+  bottom: "ip1"
+  top: "ip1"
+  dropout_param {
+    dropout_ratio: 0.5
+  }
+  include {
+    phase: TRAIN
+  }
+}
+
+# End of pre-existing network here
+# (Excluding the last loss layer etc. of cours)
+# Also exclude the finala IP layer, unless you want to replace 'top_isbox' by it. 
+####################
+
+
+
+
+
+layer {
+  name: "top_isbox"
+  type: "InnerProduct"
+  bottom: "ip1"       # <----  Rename this to the top of the pre-existing CNN
+  top: "top_isbox"     
+  param {
+    lr_mult: 1
+  }
+  param {
+    lr_mult: 2
+  }
+  inner_product_param {
+    num_output: 2
+    weight_filler {
+      type: "xavier"
+    }
+    bias_filler {
+      type: "constant"
+    }
+  }
+}
+
+layer {
+  name: "top_angle"
+  type: "InnerProduct"
+  bottom: "ip1"        # <----  Rename this to the top of the pre-existing CNN
+  top: "top_angle"
+  param {
+    lr_mult: .1
+  }
+  param {
+    lr_mult: .2
+  }
+  inner_product_param {
+    num_output: 2
+    weight_filler {
+      type: "xavier"
+    }
+    bias_filler {
+      type: "constant"
+    }
+  }
+}
+
+layer {
+  name: "top_xy"
+  type: "InnerProduct"
+  bottom: "ip1"   # <----  Rename this to the top of the pre-existing CNN
+  top: "top_xy"
+  param {
+    lr_mult: .1
+  }
+  param {
+    lr_mult: .2
+  }
+  inner_product_param {
+    num_output: 2
+    weight_filler {
+      type: "xavier"
+    }
+    bias_filler {
+      type: "constant"
+    }
+  }
+}
+
+layer {
+  name: "isbox_loss"
+  type: "SoftmaxWithLoss"
+  bottom: "top_isbox"
+  bottom: "isbox"
+  top: "isbox_loss"
+  loss_weight: 1
+}
+
+layer {
+    name: "angle_filter"
+    type: "Filter"
+    bottom: "top_angle"
+    bottom: "angle"
+    bottom: "isbox"
+    top: "top_angle_filter"
+    top: "angle_filter"
+}
+
+layer {
+    name: "xy_filter"
+    type: "Filter"
+    bottom: "top_xy"
+    bottom: "xy"
+    bottom: "isbox"
+    top: "top_xy_filter"
+    top: "xy_filter"
+}
+
+layer {
+  name: "angle_loss"
+  type: "EuclideanLoss"
+  bottom: "top_angle_filter"
+  bottom: "angle_filter"
+  top: "angle_loss"
+  loss_weight: 1
+}
+
+
+layer {
+  name: "xy_loss"
+  type: "EuclideanLoss"
+  bottom: "top_xy_filter"
+  bottom: "xy_filter"
+  top: "xy_loss"
+  loss_weight: 0.001
+}
+layer {
+  name: "accuracy"
+  type: "Accuracy"
+  bottom: "top_isbox"
+  bottom: "isbox"
+  top: "acc"
+}
