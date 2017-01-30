@@ -1,3 +1,4 @@
+## WARNING: Do not edit the file directly. It is generated from las_dataset_generatot.ipyn !!!!
 
 import pyproj
 import rasterio
@@ -57,7 +58,7 @@ class DataProvider(object):
             index = np.random.choice(self.train_pos)
         else:
             index = np.random.choice(self.test_pos)
-        print "generated positive, index={}".format(index)
+#         print "generated positive, index={}".format(index)
         dx, dy = jitter*np.random.randn(2)
         x, y = self.pos_xy[index] 
         x -= dx
@@ -79,7 +80,7 @@ class DataProvider(object):
             index = np.random.choice(self.train_neg)
         else:
             index = np.random.choice(self.test_neg)
-        print "generated negative, index={}".format(index)
+#         print "generated negative, index={}".format(index)
         dx, dy = jitter*np.random.randn(2)
         x, y = self.neg_xy[index] 
         x -= dx
