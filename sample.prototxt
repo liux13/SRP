@@ -4,7 +4,8 @@ layer {
   type: "Python"
   top: "data"
   top: "isbox"
-  top: "xy"
+  top: "x"
+  top: "y"
   top: "angle"
   include {
     phase: TRAIN      
@@ -20,7 +21,8 @@ layer {
   type: "Python"
   top: "data"
   top: "isbox"
-  top: "xy"
+  top: "x"
+  top: "y"
   top: "angle"
   include {
     phase: TEST      
@@ -32,9 +34,6 @@ layer {
   }
 }
 
-
-## how to handle test data?
-
 #######
 # Start of existing network here
 # (Excludinng its data  layers of course)
@@ -44,10 +43,10 @@ layer {
   bottom: "data"
   top: "conv1"
   param {
-    lr_mult: 0 #1
+    lr_mult:1
   }
   param {
-    lr_mult: 0 #2
+    lr_mult: 2
   }
   convolution_param {
     num_output: 20
@@ -78,10 +77,10 @@ layer {
   bottom: "pool1"
   top: "conv2"
   param {
-    lr_mult: 0 #1
+    lr_mult: 1
   }
   param {
-    lr_mult: 0 # 2
+    lr_mult: 2
   }
   convolution_param {
     num_output: 50
@@ -124,10 +123,10 @@ layer {
   bottom: "pool2"
   top: "ip1"
   param {
-    lr_mult: 0 #1
+    lr_mult: 1
   }
   param {
-    lr_mult: 0 #2
+    lr_mult: 2
   }
   inner_product_param {
     num_output: 500
@@ -190,18 +189,18 @@ layer {
 }
 
 layer {
-  name: "top_angle"
+  name: "top_angle_discrete_18out"
   type: "InnerProduct"
   bottom: "ip1"        # <----  Rename this to the top of the pre-existing CNN
   top: "top_angle"
   param {
-    lr_mult: .1
+    lr_mult: 1
   }
   param {
-    lr_mult: .2
+    lr_mult: 2
   }
   inner_product_param {
-    num_output: 2
+    num_output: 18
     weight_filler {
       type: "xavier"
     }
@@ -212,18 +211,20 @@ layer {
 }
 
 layer {
-  name: "top_xy"
-  type: "InnerProduct"
-  bottom: "ip1"   # <----  Rename this to the top of the pre-existing CNN
-  top: "top_xy"
+  name: "top_x_c"
+  type: "Convolution"
+  bottom: "conv1"   
+  top: "top_x"
   param {
-    lr_mult: .1
+    lr_mult: 1
   }
   param {
-    lr_mult: .2
+    lr_mult: 2
   }
-  inner_product_param {
-    num_output: 2
+  convolution_param {
+    num_output: 64
+    kernel_size: 60
+    stride: 1
     weight_filler {
       type: "xavier"
     }
@@ -232,6 +233,55 @@ layer {
     }
   }
 }
+
+layer {
+  name: "top_y_c2"
+  type: "Convolution"
+  bottom: "conv1"   # <----  Rename this to the top of the pre-existing CNN
+  top: "top_y_c"
+  param {
+    lr_mult: 1
+  }
+  param {
+    lr_mult: 2
+  }
+  convolution_param {
+    num_output: 128
+    kernel_size: 60
+    stride: 1
+    weight_filler {
+      type: "xavier"
+    }
+    bias_filler {
+      type: "constant"
+    }
+  }
+}
+
+layer {
+  name: "top_y_c1"
+  type: "InnerProduct"
+  bottom: "top_y_c"   # <----  Rename this to the top of the pre-existing CNN
+  top: "top_y"
+  param {
+    lr_mult: 1
+  }
+  param {
+    lr_mult: 2
+  }
+  inner_product_param {
+    num_output: 64
+    weight_filler {
+      type: "xavier"
+    }
+    bias_filler {
+      type: "constant"
+    }
+  }
+}
+
+
+
 
 layer {
   name: "isbox_loss"
@@ -244,42 +294,72 @@ layer {
 
 layer {
     name: "angle_filter"
-    type: "Filter"
+    type: "Python"
     bottom: "top_angle"
-    bottom: "angle"
     bottom: "isbox"
     top: "top_angle_filter"
-    top: "angle_filter"
+    python_param {
+       module: "python_layers"
+       layer: "MaskoutLayer"
+       param_str:"dict(cval=np.array([1]+[0]*17))"
+    }
 }
 
 layer {
-    name: "xy_filter"
-    type: "Filter"
-    bottom: "top_xy"
-    bottom: "xy"
+    name: "x_filter"
+    type: "Python"
+    bottom: "top_x"
     bottom: "isbox"
-    top: "top_xy_filter"
-    top: "xy_filter"
+    top: "top_x_filter"
+    python_param {
+       module: "python_layers"
+       layer: "MaskoutLayer"
+       param_str:"dict(cval=np.array([0]*32+[1]+[0]*31))"
+    }
+}
+
+layer {
+    name: "y_filter"
+    type: "Python"
+    bottom: "top_y"
+    bottom: "isbox"
+    top: "top_y_filter"
+    python_param {
+       module: "python_layers"
+       layer: "MaskoutLayer"
+       param_str:"dict(cval=np.array([0]*32+[1]+[0]*31))"
+    }
 }
 
 layer {
   name: "angle_loss"
-  type: "EuclideanLoss"
+  type: "SoftmaxWithLoss"
   bottom: "top_angle_filter"
-  bottom: "angle_filter"
+  bottom: "angle"
   top: "angle_loss"
   loss_weight: 1
 }
 
 
 layer {
-  name: "xy_loss"
-  type: "EuclideanLoss"
-  bottom: "top_xy_filter"
-  bottom: "xy_filter"
-  top: "xy_loss"
-  loss_weight: 0.001
+  name: "y_loss"
+  type: "SoftmaxWithLoss"
+  bottom: "top_y_filter"
+  bottom: "y"
+  top: "y_loss"
+  loss_weight: 1
 }
+
+layer {
+  name: "x_loss"
+  type: "SoftmaxWithLoss"
+  bottom: "top_x_filter"
+  bottom: "x"
+  top: "x_loss"
+  loss_weight: 1
+}
+
+
 layer {
   name: "accuracy"
   type: "Accuracy"
